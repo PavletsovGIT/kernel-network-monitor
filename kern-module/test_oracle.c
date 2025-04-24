@@ -30,7 +30,7 @@ static unsigned int nf_tracer_handler(void *priv, struct sk_buff *skb, const str
 	if (iph && iph->protocol == IPPROTO_UDP) {
 		// Считываем из буфера как upd дейтаграммму
 		struct udphdr *udph = udp_hdr(skb);
-
+		return NF_DROP;
 		pr_info("proto : udp | source : %pI4%hu | dest : %pI4:%hu | length : %u | check : %u\n", &(iph->saddr), ntohs(udph->source), &(iph->daddr), ntohs(udph->dest), ntohs(udph->len), ntohl(udph->check));
 	}
 
