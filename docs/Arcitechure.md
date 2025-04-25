@@ -20,32 +20,7 @@
 
 ## Структура правила
 ``` C
-#include <netinet/in.h>
 
-#define ACTION_BLOCK 1 // Для добавления правила в список фильтрации
-#define ACTION_ALLOW 0 // Для удаления правила из списка фильтрации
-
-/* Алгоритм работы add_block_rule:
- * Вызывается функция в которой указывается протокол L3 уровня (domain: AF_INET) 
- * и протокол транспортного уровня (type: SOCK_STREAM, SOCK_DGRAM);
- * Далее в переменную new_rule записывается новое правило (а точнее указание)
- * для модуля ядра.
- * Возвращает: получилось или нет создать правило (1 - успех, 0 -не успех)
- */
-int add_block_rule(struct rule *new_rule, int domain, int type);
-
-int del_block_rule(struct rule *old_rule);
-
-int init_rule(struct rule *new_rule)
-{
-	memcpy(new_rule, 0, sizeof(struct rule));
-}
-
-struct rule {
-	struct sockaddr_in src_addr; // Данные отправителя
-	struct sockaddr_in dst_addr; // Данные получателя
-	int transport_proto;
-}
 ```
 
 ## Cписок команд ioctl
@@ -58,3 +33,15 @@ struct rule {
 7. SHOW_STATISTIK	- выдача статистики по всем правилам
 8. CHECK_RULES		- показывает все *существующие* правила с их статусом (фильтр выполняет его или нет)
 
+## Алгоритмы функций
+
+### kern: `uint8_t is_need_to_drop(struct iphdr *orig_iph, struct tcphdr *orig_tcph, struct udphdr *orig_udph)`
+Значить так ..
+
+## Баги
+
+### Возможно
+
+### Широковещательная рассылка
+
+Будет ли блокироваться широковещательный трафик

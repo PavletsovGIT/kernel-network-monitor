@@ -26,7 +26,7 @@ struct kern_rule {
 	struct in_addr dst_ip;
 	uint16_t src_port;
 	uint16_t dst_port;
-	uint8_t proto;       // IPPROTO_TCP/UDP
+	uint8_t proto;
 	uint8_t defined_fields;
 };
 
@@ -39,12 +39,13 @@ struct app_cmd {
 		CMD_DEL_RULE,
 		CMD_SHOW_STATS
 	} command;
-}
+};
 
 struct kern_cmd {
 	struct kern_rule rule;
 	uint8_t res;
-}
+};
+
 // Добавление правила в фильтр
 #define ADD_RULE _IOW('a', 'a', struct kern_cmd *)
 // Удаление правила из фильтра
