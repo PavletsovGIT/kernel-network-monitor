@@ -47,9 +47,9 @@ struct kern_cmd {
 };
 
 // Добавление правила в фильтр
-#define ADD_RULE _IOW('a', 'a', struct kern_cmd *)
+#define ADD_RULE _IOWR('a', 'a', struct kern_cmd *)
 // Удаление правила из фильтра
-#define DEL_RULE _IOR('a', 'b', struct kern_cmd *)
+#define DEL_RULE _IOWR('a', 'b', struct kern_cmd *)
 // Чтение стсатистики из ядра
 #define SHOW _IOR('a', 'c', char *)
 

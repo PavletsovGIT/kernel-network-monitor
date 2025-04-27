@@ -3,6 +3,12 @@
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <sys/types.h>
+#include <string.h>
+#include <stdint.h>
+#include <sys/socket.h>
+#include <netinet/ip.h>
+#include <arpa/inet.h>
 
 #include "/home/pavletsov21/eltex/knm/common/ioctl_cmd.h"
 
@@ -11,6 +17,8 @@
 // Прототипы функций валидации
 static int validate_port(uint16_t port);
 static int validate_proto(const char *proto);
+
+void print_usage();
 
 int main(int argc, char *argv[]) {
 	struct app_cmd config;
@@ -61,7 +69,7 @@ int main(int argc, char *argv[]) {
 			break;
 			
 		case 2: // --transport
-			config.proto = validate_proto(optarg);
+			config.rule.proto = validate_proto(optarg);
 			if (!config.rule.proto) {
 				fprintf(stderr, "Unsupported protocol: %s\n", optarg);
 				exit(EXIT_FAILURE);
@@ -109,18 +117,21 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Валидация комбинаций параметров
-	if (config.command == CMD_ADD_RULE || config.command == CMD_DEL_RULE) {
-		if (!config.has_src_ip && !config.has_dst_ip && 
-			!config.has_src_port && !config.has_dst_port) {
-			fprintf(stderr, "Rule must have at least one criteria\n");
-			exit(EXIT_FAILURE);
-		}
+	if (!(config.command == CMD_ADD_RULE || config.command == CMD_DEL_RULE) && !(config.rule.defined_fields != 0)) 
+	{
+		fprintf(stderr, "Rule must have at least one criteria\n");
+		exit(EXIT_FAILURE);
 	}
 
+	printf("Formed rule | ipsrc : %d | ipdst : %d | portsrc : %d | portdst : %d | proto : %s | def_f : %d\n", config.rule.src_ip.s_addr, 
+					config.rule.dst_ip.s_addr, config.rule.src_port, 
+					config.rule.dst_port, (config.rule.proto == IPPROTO_TCP) ? "tcp" : "udp",config.rule.defined_fields);
+
 	// Копируем данные из config в kern_config для передачи в ядро
-	memcpy(&kern_config.rule, config.rule, sizeof(config.rule));
+	kern_config.rule = config.rule;
 	// Передача команды в ядро (только kern_rule или ссылку на buf, если это show)
 	switch (config.command)
+	{
 		case CMD_NONE:
 			break;
 		case CMD_ADD_RULE:
@@ -136,10 +147,16 @@ int main(int argc, char *argv[]) {
 			ioctl(dev, SHOW, buf);
 			break;
 		default:
-			fprintf(stderr, );
 			break;
+	}
 
 	// Обработка результата
+	if (kern_config.res < 0)
+	{
+		fprintf(stderr, "ERROR");
+	}
+
+	return 0;
 }
 
 // Валидация порта

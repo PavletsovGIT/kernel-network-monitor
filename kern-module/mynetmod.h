@@ -13,6 +13,8 @@
 #include <linux/inet.h>
 #include <linux/proc_fs.h>
 
+#define DEVICE_NAME "mynetmod"
+
 static struct nf_hook_ops *nf_tracer_ops = NULL;
 static struct nf_hook_ops *nf_tracer_out_ops = NULL;
 
@@ -36,7 +38,8 @@ enum {
 #define DST_PORT_BIT_MASK 	0x8		/* 00001000 */
 #define PROTO_BIT_MASK 		0x10	/* 00010000 */
 
-#define MAX_RULES 10
+#define MAX_RULES	10
+#define BUF_SIZE	1024
 
 /* Инициализация списка правил */
 static uint8_t init_rules_list(void);

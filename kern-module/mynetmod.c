@@ -1,5 +1,10 @@
 #include "./mynetmod.h"
 
+static int major;
+static int minor;
+
+static struct class *cls;
+
 /* Переменные для директории и файла в procfs */
 static struct proc_dir_entry *proc_folder;
 static struct proc_dir_entry *proc_file;
@@ -32,9 +37,11 @@ static uint8_t init_rules_list(void)
 /* Для добавления правила */
 static uint8_t add_rule(struct kern_rule *rule)
 {
+	/* Вдруг заполнено */
 	if (rules_count == MAX_RULES) return EFULLRL;
 
-	memcpy(&rules_list[rules_count], rule, sizeof(struct kern_rule));
+	/* Присваиваем последнему элементу */
+	rules_list[rules_count] = *rule; 
 
 	return 1;
 }
@@ -56,11 +63,11 @@ static uint8_t is_need_to_drop(struct iphdr *orig_iph, struct tcphdr *orig_tcph,
 
 	for (i = 0; i < rules_count; i++)
 	{
-		pr_info("src ip test : %d, src ip pack : %d", rules_list[i].src_ip.s_addr, orig_iph->saddr);
-		pr_info("dst ip test : %d, dst ip pack : %d", rules_list[i].dst_ip.s_addr, orig_iph->daddr);
-		pr_info("proto test : %s, proto pack : %s", (rules_list[i].proto == IPPROTO_TCP) ? "tcp" : "udp", (orig_iph->protocol) == IPPROTO_TCP ? "tcp" : "udp");
-		pr_info("src port test : %d, src port pack : %d", rules_list[i].src_port, orig_tcph->source);
-		pr_info("dst port test : %d, dst port pack : %d", rules_list[i].src_port, orig_tcph->source);
+		//pr_info("src ip test : %d, src ip pack : %d", rules_list[i].src_ip.s_addr, orig_iph->saddr);
+		//pr_info("dst ip test : %d, dst ip pack : %d", rules_list[i].dst_ip.s_addr, orig_iph->daddr);
+		//pr_info("proto test : %s, proto pack : %s", (rules_list[i].proto == IPPROTO_TCP) ? "tcp" : "udp", (orig_iph->protocol) == IPPROTO_TCP ? "tcp" : "udp");
+		//pr_info("src port test : %d, src port pack : %d", rules_list[i].src_port, orig_tcph->source);
+		//pr_info("dst port test : %d, dst port pack : %d", rules_list[i].src_port, orig_tcph->source);
 		if (rules_list[i].defined_fields & SRC_IP_BIT_MASK)
 		{
 			if (rules_list[i].src_ip.s_addr == orig_iph->saddr)
@@ -132,7 +139,8 @@ static unsigned int nf_tracer_handler(void *priv, struct sk_buff *skb, const str
 	if(iph && iph->protocol == IPPROTO_TCP) 
 	{
 		tcph = tcp_hdr(skb);
-		pr_info("proto : tcp | source : %pI4:%hu | dest : %pI4:%hu | seq : %u | ack_seq : %u | window : %hu | csum : 0x%hx | urg_ptr %hu\n", &(iph->saddr),ntohs(tcph->source),&(iph->daddr),ntohs(tcph->dest), ntohl(tcph->seq), ntohl(tcph->ack_seq), ntohs(tcph->window), ntohs(tcph->check), ntohs(tcph->urg_ptr));
+		pr_info("proto : tcp | source : %pI4:%hu | dest : %pI4:%hu | seq : %u | ack_seq : %u | window : %hu | csum : 0x%hx | urg_ptr %hu\n", \
+			&(iph->saddr),ntohs(tcph->source),&(iph->daddr),ntohs(tcph->dest), ntohl(tcph->seq), ntohl(tcph->ack_seq), ntohs(tcph->window), ntohs(tcph->check), ntohs(tcph->urg_ptr));
 	}
 
 	// Вывод UDP дейтаграмм
@@ -140,7 +148,8 @@ static unsigned int nf_tracer_handler(void *priv, struct sk_buff *skb, const str
 	{
 		// Считываем из буфера как upd дейтаграммму
 		udph = udp_hdr(skb);
-		pr_info("proto : udp | source : %pI4:%hu | dest : %pI4:%hu | length : %u | check : %u\n", &(iph->saddr), ntohs(udph->source), &(iph->daddr), ntohs(udph->dest), ntohs(udph->len), ntohl(udph->check));
+		pr_info("proto : udp | source : %pI4:%hu | dest : %pI4:%hu | length : %u | check : %u\n", \
+			&(iph->saddr), ntohs(udph->source), &(iph->daddr), ntohs(udph->dest), ntohs(udph->len), ntohl(udph->check));
 	}
 
 	// Смотрим подходит ли пакет по шаблонну
@@ -170,13 +179,52 @@ static long int ioctl_handler(struct file *file, unsigned cmd, unsigned long arg
 {
 	/* Структура для записи команд от пользователя и ответа */
 	struct kern_cmd user_cmd;
+	int res;
+
+	memset(&user_cmd, 0, sizeof(user_cmd));
 
 	switch (cmd)
 	{
 		case ADD_RULE:
+			/* Читаем команду с правилом от пользователя */
+			if (copy_from_user(&user_cmd, (struct kern_cmd *)arg, sizeof(user_cmd)))
+			{
+				pr_err("mynetmod : Error copying data from user\n");
+				break;
+			}
+
+			pr_info("Getted rule | ipsrc : %d | ipdst : %d | portsrc : %d | portdst : %d | proto : %s | def_f : %d\n", user_cmd.rule.src_ip.s_addr, 
+					user_cmd.rule.dst_ip.s_addr, user_cmd.rule.src_port, 
+					user_cmd.rule.dst_port, (user_cmd.rule.proto == IPPROTO_TCP) ? "tcp" : "udp", user_cmd.rule.defined_fields);
+
+			/* Добавляем правило и печатаем назад результат */
+			res = add_rule(&user_cmd.rule);
+			/* Возвращаем с результатом добавления */
+			user_cmd.res = res;
+			if (copy_to_user((struct kern_cmd *)arg, &user_cmd, sizeof(user_cmd)))
+			{
+				pr_err("mynetmod : Error copying data to user\n");
+				break;
+			}
 			break;
 
 		case DEL_RULE:
+			/* Читаем команду с правилом от пользователя */
+			if (copy_from_user(&user_cmd, (struct kern_cmd *)arg, sizeof(user_cmd)))
+			{
+				pr_err("mynetmod : Error copying data from user\n");
+				break;
+			}
+
+			/* Добавляем правило и печатаем назад результат */
+			res = add_rule(&user_cmd.rule);
+			/* Возвращаем с результатом добавления */
+			user_cmd.res = res;
+			if (copy_to_user((struct kern_cmd *)arg, &user_cmd, sizeof(user_cmd)))
+			{
+				pr_err("mynetmod : Error copying data to user\n");
+				break;
+			}
 			break;
 
 		default:
@@ -208,8 +256,7 @@ static ssize_t mynetmod_read(struct file *File, char __user *user_buf, size_t co
 
 	/* Узнаём сколько будем передавать в userspace */
 	to_copy = min(count, sizeof(text));
-	pr_info("mynetmod : will copy to user %d bytes; count = %d; sizeof(text) = %d;\n", to_copy, count, sizeof(text));
-
+	
 	/* Передаём информацию */
 	not_copied = copy_to_user(user_buf, text, to_copy);
 
@@ -239,11 +286,37 @@ static int __init mynetmod_init(void)
 		proc_remove(proc_folder);
 		return -ENOMEM;
 	}
-
 	pr_info("mynetmod : self folder and files in procfs are created\n");
+
+	/* Получаем major num для устройства */
+	major = register_chrdev(0, DEVICE_NAME, &fops);
+	minor = 0;
+	if (major < 0)
+	{
+		pr_alert("mynetmod : register chardev failed with %d\n", major);
+		return major;
+	}
+
+	/* Создаём файл в /dev */
+	cls = class_create(THIS_MODULE, DEVICE_NAME);
+	device_create(cls, NULL, MKDEV(major, minor), NULL, DEVICE_NAME);
+	pr_info("mynetmod : device created on /dev/%s\n", DEVICE_NAME);
 
 	/* Инициализация rules_list */
 	init_rules_list();
+
+	/* Добавим тестовое правило 
+	 * ipsrc : 127.0.0.1
+	 * portsrc : 8080
+	 * proto : udp
+	 */
+	//struct kern_rule test_rule;
+	//memset(&test_rule, 0, sizeof(struct kern_rule));
+	//test_rule.src_ip.s_addr = 16777343;
+	//test_rule.src_port = 8080;
+	//test_rule.proto = IPPROTO_UDP;
+	//rules_list[0] = test_rule;
+	//rules_count++;
 
 	/* Выделяем память для хуков */
 	nf_tracer_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
@@ -276,6 +349,13 @@ static int __init mynetmod_init(void)
 /* Функция деструктор модуля ядра */
 static void __exit mynetmod_exit(void)
 {
+	/* Удаляем proc файл и директорию */
+	proc_remove(proc_file);
+	proc_remove(proc_folder);
+
+	/* Освобождаем девайс */
+	unregister_chrdev(major, DEVICE_NAME);
+
 	/* Освобождаем память от хуков */
 	if(nf_tracer_ops != NULL) {
 		nf_unregister_net_hook(&init_net, nf_tracer_ops);
