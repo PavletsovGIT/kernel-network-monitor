@@ -11,6 +11,7 @@
 #include <linux/string.h>
 #include <linux/byteorder/generic.h>
 #include <linux/inet.h>
+#include <linux/proc_fs.h>
 
 static struct nf_hook_ops *nf_tracer_ops = NULL;
 static struct nf_hook_ops *nf_tracer_out_ops = NULL;
@@ -38,7 +39,7 @@ enum {
 #define MAX_RULES 10
 
 /* Инициализация списка правил */
-static uint8_t init_rules_list();
+static uint8_t init_rules_list(void);
 
 /* Для добавления правила */
 static uint8_t add_rule(struct kern_rule *rule);
@@ -63,6 +64,9 @@ static int device_open(struct inode *device_file, struct file *instance);
 
 /* Функция, вызываемая при закрытии файла /dev/mynetmod */
 static int device_exit(struct inode *device_file, struct file *instance);
+
+/* Функция для чтения файла /proc */
+static ssize_t mynetmod_read(struct file *File, char __user *user_buf, size_t count, loff_t *offs);
 
 /* Функция инициализации модуля ядра */
 static int __init mynetmod_init(void);

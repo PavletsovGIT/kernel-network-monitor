@@ -1,4 +1,4 @@
-obj-m += test_oracle.o
+obj-m += mynetmod.o
 
 PWD = /home/pavletsov21/eltex/knm/kern-module/
 

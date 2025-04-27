@@ -1,9 +1,13 @@
 #include "./mynetmod.h"
 
+/* Переменные для директории и файла в procfs */
+static struct proc_dir_entry *proc_folder;
+static struct proc_dir_entry *proc_file;
+
 static struct kern_rule rules_list[MAX_RULES];
 static uint8_t rules_count;
 
-/* Настравиваем работу с модулем */
+/* Настравиваем работу с модулем через /dev */
 static struct file_operations fops = {
 	.owner = THIS_MODULE,
 	.open = device_open,
@@ -11,8 +15,13 @@ static struct file_operations fops = {
 	.unlocked_ioctl = ioctl_handler
 };
 
+/* Настравиваем работу с можулем через /proc */
+static struct proc_ops pops = {
+	.proc_read = mynetmod_read
+};
+
 /* Инициализация списка правил */
-static uint8_t init_rules_list()
+static uint8_t init_rules_list(void)
 {
 	memset(rules_list, 0, MAX_RULES * sizeof(struct kern_rule));
 	rules_count = 0;
@@ -25,7 +34,7 @@ static uint8_t add_rule(struct kern_rule *rule)
 {
 	if (rules_count == MAX_RULES) return EFULLRL;
 
-	memcpy(rules_list[rules_count], rule, sizeof(struct kern_rule));
+	memcpy(&rules_list[rules_count], rule, sizeof(struct kern_rule));
 
 	return 1;
 }
@@ -69,6 +78,9 @@ static uint8_t is_need_to_drop(struct iphdr *orig_iph, struct tcphdr *orig_tcph,
 			if (rules_list[i].proto == orig_iph->protocol)
 				res |= PROTO_BIT_MASK;
 		}
+
+		// ssize_t (*)(struct file *, char *, size_t,  loff_t *)’ {aka ‘long int (*)(struct file *, char *, long unsigned int,  long long int *)’}
+		// ssize_t (*)(struct file *, const char *, size_t,  loff_t *)’ {aka ‘long int (*)(struct file *, const char *, long unsigned int,  long long int *)’}
 
 		if (rules_list[i].defined_fields & SRC_PORT_BIT_MASK)
 		{
@@ -170,6 +182,8 @@ static long int ioctl_handler(struct file *file, unsigned cmd, unsigned long arg
 		default:
 			break;
 	}
+
+	return 0;
 }
 
 /* Функция, вызываемая при открытии файла /dev/mynetmod */
@@ -186,17 +200,56 @@ static int device_exit(struct inode *device_file, struct file *instance)
 	return 0;
 }
 
+/* Функция для чтения файла /proc */
+static ssize_t mynetmod_read(struct file *File, char __user *user_buf, size_t count, loff_t *offs)
+{
+	char text[] = "Someday I'll make statistics and display them. Someday... \n";
+	int to_copy, not_copied, delta;
+
+	/* Узнаём сколько будем передавать в userspace */
+	to_copy = min(count, sizeof(text));
+	pr_info("mynetmod : will copy to user %d bytes; count = %d; sizeof(text) = %d;\n", to_copy, count, sizeof(text));
+
+	/* Передаём информацию */
+	not_copied = copy_to_user(user_buf, text, to_copy);
+
+	/* Вычисляем сколько осталось передать */
+	delta = to_copy - not_copied;
+
+	return delta;
+}
+
 /* Функция инициализации модуля ядра */
 static int __init mynetmod_init(void)
 {
+	umode_t proc_mod = 0444; /* ugo+r */
+
+	/* Создание /proc/mynetnod/bl_stats */
+	proc_folder = proc_mkdir("mynetmod", NULL);
+	if (proc_folder == NULL)
+	{
+		pr_alert("mynetmod : ERROR - proc_mkdir(\"mynetmod\", ...)\n");
+		return -ENOMEM;
+	}
+
+	proc_file = proc_create("bl_stats", proc_mod, proc_folder, &pops);
+	if (proc_folder == NULL)
+	{
+		pr_alert("mynetmod : ERROR - proc_create(\"bl_stats\", ...);\n");
+		proc_remove(proc_folder);
+		return -ENOMEM;
+	}
+
+	pr_info("mynetmod : self folder and files in procfs are created\n");
+
 	/* Инициализация rules_list */
 	init_rules_list();
 
-	/* alloc memory for hook */
+	/* Выделяем память для хуков */
 	nf_tracer_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
 	nf_tracer_out_ops = (struct nf_hook_ops*)kcalloc(1, sizeof(struct nf_hook_ops), GFP_KERNEL);
 
-	/* register hooks */
+	/* Регистрируем хуки */
 	if (nf_tracer_ops!=NULL) 
 	{
 		nf_tracer_ops->hook = (nf_hookfn*)nf_tracer_handler;
@@ -223,7 +276,7 @@ static int __init mynetmod_init(void)
 /* Функция деструктор модуля ядра */
 static void __exit mynetmod_exit(void)
 {
-	/* ... */
+	/* Освобождаем память от хуков */
 	if(nf_tracer_ops != NULL) {
 		nf_unregister_net_hook(&init_net, nf_tracer_ops);
 		kfree(nf_tracer_ops);
