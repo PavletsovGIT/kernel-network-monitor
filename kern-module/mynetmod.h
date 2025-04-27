@@ -1,0 +1,73 @@
+#ifndef MYNETMOG_H_
+#define MYNETMOD_H_
+
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/netfilter.h>
+#include <linux/netfilter_ipv4.h>
+#include <linux/ip.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
+#include <linux/string.h>
+#include <linux/byteorder/generic.h>
+#include <linux/inet.h>
+
+static struct nf_hook_ops *nf_tracer_ops = NULL;
+static struct nf_hook_ops *nf_tracer_out_ops = NULL;
+
+#include "/home/pavletsov21/eltex/knm/common/ioctl_cmd.h"
+
+/* Список ошибок */
+enum {
+	EFULLRL = -1,					/* Error FULL Rull List - Список правил заполнен */
+	EREMRULE						/* Error REMoving RULE - Список правил заполнен */
+} mynetmod_errors;
+
+#define SRC_IP_BIT_NUM 		0
+#define DST_IP_BIT_NUM 		1
+#define SRC_PORT_BIT_NUM 	2
+#define DST_PORT_BIT_NUM 	3
+#define PROTO_BIT_NUM 		4
+
+#define SRC_IP_BIT_MASK 	0x1		/* 00000001 */
+#define DST_IP_BIT_MASK 	0x2		/* 00000010 */
+#define SRC_PORT_BIT_MASK 	0x4		/* 00000100 */
+#define DST_PORT_BIT_MASK 	0x8		/* 00001000 */
+#define PROTO_BIT_MASK 		0x10	/* 00010000 */
+
+#define MAX_RULES 10
+
+/* Инициализация списка правил */
+static uint8_t init_rules_list();
+
+/* Для добавления правила */
+static uint8_t add_rule(struct kern_rule *rule);
+
+/* Для удаления правила */
+static uint8_t remove_rule(struct kern_rule *rule);
+
+/* Сверяет пакет с правилами в фильтре. Возвр 1 если пакет идентичен одному из правил
+ * и возвр. 0, если совпадений не найдено.
+ * Если используется для TCP, то orig_udph == NULL
+ */
+static uint8_t is_need_to_drop(struct iphdr *orig_iph, struct tcphdr *orig_tcph, struct udphdr *orig_udph);
+
+/* Обработчик хука IP_PRE_ROUTING */
+static unsigned int nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state);
+
+/* Обработчик команд ioctl */
+static long int ioctl_handler(struct file *file, unsigned cmd, unsigned long arg);
+
+/* Функция, вызываемая при открытии файла /dev/mynetmod */
+static int device_open(struct inode *device_file, struct file *instance);
+
+/* Функция, вызываемая при закрытии файла /dev/mynetmod */
+static int device_exit(struct inode *device_file, struct file *instance);
+
+/* Функция инициализации модуля ядра */
+static int __init mynetmod_init(void);
+
+/* Функция деструктор модуля ядра */
+static void __exit mynetmod_exit(void);
+
+#endif // MYNETMOD_H_

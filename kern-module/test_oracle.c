@@ -14,11 +14,11 @@ static struct nf_hook_ops *nf_tracer_out_ops = NULL;
 
 #include "/home/pavletsov21/eltex/knm/common/ioctl_cmd.h"
 
-#define SRC_IP_BIT_NUM 		0		// 00000001
-#define DST_IP_BIT_NUM 		1		// 00000010
-#define SRC_PORT_BIT_NUM 	2		// 00000100
-#define DST_PORT_BIT_NUM 	3		// 00001000
-#define PROTO_BIT_NUM 		4		// 00010000
+#define SRC_IP_BIT_NUM 		0
+#define DST_IP_BIT_NUM 		1
+#define SRC_PORT_BIT_NUM 	2
+#define DST_PORT_BIT_NUM 	3
+#define PROTO_BIT_NUM 		4
 
 #define SRC_IP_BIT_MASK 	0x1		// 00000001
 #define DST_IP_BIT_MASK 	0x2		// 00000010
@@ -110,56 +110,6 @@ static uint8_t is_need_to_drop(struct iphdr *orig_iph, struct tcphdr *orig_tcph,
 		if (res == rules_list[i].defined_fields)
 			return 1;
 	}
-
-	return 0;
-}
-
-static uint8_t sada_is_need_to_drop(struct iphdr *orig_iph, struct tcphdr *orig_tcph, struct udphdr *orig_udph)
-{
-	/* Переделать на побитовый сдвиг результата XOR, вместо if */
-	uint8_t res = 0;
-	int i;
-
-	for (i = 0; i < rules_count; i++)
-	{
-		pr_info("src ip test : %d, src ip pack : %d", rules_list[i].src_ip.s_addr, orig_iph->saddr);
-		if (rules_list[i].src_ip.s_addr == orig_iph->saddr)
-		{
-			res |= SRC_IP_BIT_MASK;
-		}
-		pr_info("dst ip test : %d, dst ip pack : %d", rules_list[i].dst_ip.s_addr, orig_iph->daddr);
-		if (rules_list[i].dst_ip.s_addr == orig_iph->daddr)
-			res |= DST_IP_BIT_MASK;
-
-		if (orig_iph->protocol == IPPROTO_TCP)
-		{
-			res |= PROTO_BIT_MASK;
-
-			pr_info("src port test : %d, src port pack : %d", rules_list[i].src_port, orig_tcph->source);
-			if (rules_list[i].src_port == orig_tcph->source)
-				res |= SRC_PORT_BIT_MASK;
-
-			pr_info("dst port test : %d, dst port pack : %d", rules_list[i].src_port, orig_tcph->source);
-			if (rules_list[i].dst_port == orig_tcph->dest)
-				res |= DST_PORT_BIT_MASK;
-		} else 
-		{ /* orig_iph->protocol == IPPROTO_UDP */
-			res |= PROTO_BIT_MASK;
-
-			if (rules_list[i].src_port == orig_udph->source)
-				res |= SRC_PORT_BIT_MASK;
-
-			if (rules_list[i].dst_port == orig_udph->dest)
-				res |= DST_PORT_BIT_MASK;
-		}
-
-		if (!(rules_list[i].defined_fields & res))
-			return 1;
-
-		res = 0;
-	}
-
-
 
 	return 0;
 }
