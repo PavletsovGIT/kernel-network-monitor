@@ -41,6 +41,15 @@ enum {
 #define MAX_RULES	10
 #define BUF_SIZE	1024
 
+/* Запись прафила в строку */
+static uint8_t print_rule(struct kern_rule *rule, char *buf, size_t buf_length);
+
+/* Запись пакета в строку */
+static uint8_t print_packet(struct iphdr *iph, struct tcphdr *tcph, struct udphdr *udph, char *buf, size_t buf_length);
+
+/* Проверка пакета и правила на идентичность данных */
+static uint8_t is_packet_equal_rule(struct iphdr *iph, struct tcphdr *tcph, struct udphdr *udph, struct kern_rule *rule);
+
 /* Инициализация списка правил */
 static uint8_t init_rules_list(void);
 
@@ -67,6 +76,9 @@ static int device_open(struct inode *device_file, struct file *instance);
 
 /* Функция, вызываемая при закрытии файла /dev/mynetmod */
 static int device_exit(struct inode *device_file, struct file *instance);
+
+/* Функция для записи статиситки в переменную buf */
+static void get_stats(char *buf, size_t buf_length);
 
 /* Функция для чтения файла /proc */
 static ssize_t mynetmod_read(struct file *File, char __user *user_buf, size_t count, loff_t *offs);

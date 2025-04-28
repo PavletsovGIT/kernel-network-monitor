@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
 			break;
 			
 		case 3: // --portsrc
-			config.rule.src_port = (uint16_t)strtoul(optarg, NULL, 10);
+			config.rule.src_port = htons((uint16_t)strtoul(optarg, NULL, 10));
 			if (!validate_port(config.rule.src_port)) {
 				fprintf(stderr, "Invalid source port: %s\n", optarg);
 				exit(EXIT_FAILURE);
@@ -87,7 +87,7 @@ int main(int argc, char *argv[]) {
 			break;
 			
 		case 4: // --portdst
-			config.rule.dst_port = (uint16_t)strtoul(optarg, NULL, 10);
+			config.rule.dst_port = htons((uint16_t)strtoul(optarg, NULL, 10));
 			if (!validate_port(config.rule.dst_port)) {
 				fprintf(stderr, "Invalid destination port: %s\n", optarg);
 				exit(EXIT_FAILURE);
