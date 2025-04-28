@@ -12,24 +12,32 @@
 
 #include "/home/pavletsov21/eltex/knm/common/ioctl_cmd.h"
 
-#define DEVICE_NAME "/dev/mynetmod"
+#define PORTNUM_MIN 0
+#define PORTNUM_MAX 65535
 
-// Прототипы функций валидации
+#define DEVICE_NAME "mynetmod"
+#define PROC_STATS_NAME "bl_stats"
+
+/* Прототипы функций валидации */
 static int validate_port(uint16_t port);
 static int validate_proto(const char *proto);
 
-void print_usage();
+/* --help */
+void print_usage(char *arg);
+
+int get_stats(char *buf, size_t buf_length);
 
 int main(int argc, char *argv[]) {
 	struct app_cmd config;
 	struct kern_cmd kern_config;
-	int opt;
-	int option_index = 0;
-	int dev;
+	int opt, option_index = 0, dev, res;
 	char buf[BUF_SIZE] = {0};
+	char dev_name[NAME_SIZE] = {0};
+
+	snprintf(dev_name, NAME_SIZE, "/dev/%s", DEVICE_NAME);
 
 	// Инициализация дескриптора файла драйвера
-	dev = open(DEVICE_NAME, O_WRONLY);
+	dev = open(dev_name, O_WRONLY);
 	if (dev == -1) {
 		perror("open");
 		return -1;
@@ -78,7 +86,7 @@ int main(int argc, char *argv[]) {
 			break;
 			
 		case 3: // --portsrc
-			config.rule.src_port = htons((uint16_t)strtoul(optarg, NULL, 10));
+			config.rule.src_port = (uint16_t)strtoul(optarg, NULL, 10);
 			if (!validate_port(config.rule.src_port)) {
 				fprintf(stderr, "Invalid source port: %s\n", optarg);
 				exit(EXIT_FAILURE);
@@ -87,7 +95,7 @@ int main(int argc, char *argv[]) {
 			break;
 			
 		case 4: // --portdst
-			config.rule.dst_port = htons((uint16_t)strtoul(optarg, NULL, 10));
+			config.rule.dst_port = (uint16_t)strtoul(optarg, NULL, 10);
 			if (!validate_port(config.rule.dst_port)) {
 				fprintf(stderr, "Invalid destination port: %s\n", optarg);
 				exit(EXIT_FAILURE);
@@ -111,13 +119,13 @@ int main(int argc, char *argv[]) {
 			break;
 			
 		default:
-			print_usage();
+			print_usage(argv[0]);
 			exit(EXIT_FAILURE);
 		}
 	}
 
 	// Валидация комбинаций параметров
-	if (!(config.command == CMD_ADD_RULE || config.command == CMD_DEL_RULE) && !(config.rule.defined_fields != 0)) 
+	if (!(config.command == CMD_ADD_RULE || config.command == CMD_DEL_RULE || config.command == CMD_SHOW_STATS) && !(config.rule.defined_fields != 0))  
 	{
 		fprintf(stderr, "Rule must have at least one criteria\n");
 		exit(EXIT_FAILURE);
@@ -144,7 +152,8 @@ int main(int argc, char *argv[]) {
 			break;
 		case CMD_SHOW_STATS:
 			// считывает статистику
-			ioctl(dev, SHOW, buf);
+			res = get_stats(buf, BUF_SIZE);
+			printf("%s", buf);
 			break;
 		default:
 			break;
@@ -152,26 +161,27 @@ int main(int argc, char *argv[]) {
 
 	// Обработка результата
 	if (kern_config.res < 0)
-	{
-		fprintf(stderr, "ERROR");
-	}
+		fprintf(stderr, "ERROR exequting request\n");
 
 	return 0;
 }
 
 // Валидация порта
-static int validate_port(uint16_t port) {
-	return port > 0 && port <= 65535;
+static int validate_port(uint16_t port) 
+{
+	return port > PORTNUM_MIN && port <= PORTNUM_MAX;
 }
 
 // Валидация протокола
-static int validate_proto(const char *proto) {
+static int validate_proto(const char *proto) 
+{
 	if (strcasecmp(proto, "tcp") == 0) return IPPROTO_TCP;
 	if (strcasecmp(proto, "udp") == 0) return IPPROTO_UDP;
 	return 0;
 }
 
-void print_usage() {
+void print_usage(char *arg) 
+{
 	printf("Usage: %s [OPTIONS]\n"
 		   "Options:\n"
 		   "  --ipsrc IP         Source IP address\n"
@@ -180,5 +190,30 @@ void print_usage() {
 		   "  --portsrc PORT     Source port\n"
 		   "  --portdst PORT     Destination port\n"
 		   "  --show             Show statistics\n"
-		   "  --filter ACTION    Enable/disable filter (enable|disable)\n");
+		   "  --filter ACTION    Enable/disable filter (enable|disable)\n", arg);
+}
+
+int get_stats(char *buf, size_t buf_length) 
+{
+	char filename[NAME_SIZE];
+	FILE *fp;
+	size_t total_read = 0;
+	size_t n;
+
+	snprintf(filename, sizeof(filename), "/proc/%s/%s", DEVICE_NAME, PROC_STATS_NAME);
+	
+	fp = fopen(filename, "r");
+	if (!fp) {
+		perror("fopen()");
+		return -1;
+	}
+
+	while ((n = fread(buf + total_read, 1, buf_length - total_read - 1, fp)) > 0) {
+		total_read += n;
+		if (total_read >= buf_length - 1) break;
+	}
+
+	buf[total_read] = '\0';
+	fclose(fp);
+	return total_read;
 }

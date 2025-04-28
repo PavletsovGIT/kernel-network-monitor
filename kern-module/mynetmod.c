@@ -28,9 +28,9 @@ static struct proc_ops pops = {
 
 static uint8_t print_rule(struct kern_rule *rule, char *buf, size_t buf_length)
 {
-	return snprintf(buf, buf_length, "Rule | ipsrc : %pI4:%hu | ipdst : %pI4:%hu | proto : %s | def_f : %d\n", &rule->src_ip, rule->src_port, 
-										&rule->dst_ip, rule->dst_port, 
-										(rule->proto == IPPROTO_TCP) ? "TCP" : "UDP", rule->defined_fields);
+	return snprintf(buf, buf_length, "Rule | source : %pI4:%hu | dest : %pI4:%hu | proto : %s | def_f : %d | blocks : %d\n", &rule->src_ip, ntohs(rule->src_port), 
+										&rule->dst_ip, ntohs(rule->dst_port), 
+										(rule->proto == IPPROTO_TCP) ? "TCP" : "UDP", rule->defined_fields, rule->blocking_count);
 }
 
 static uint8_t print_packet(struct iphdr *iph, struct tcphdr *tcph, struct udphdr *udph, char *buf, size_t buf_length)
@@ -48,8 +48,8 @@ static uint8_t print_packet(struct iphdr *iph, struct tcphdr *tcph, struct udphd
 		dest_port = udph->dest;
 	}
 
-	return snprintf(buf, buf_length, "Packet | ipsrc : %pI4:%hu | ipdst : %pI4:%hu | proto : %s\n", &iph->saddr, source_port, 
-										&iph->daddr, dest_port, (proto == IPPROTO_TCP) ? "TCP" : "UDP");
+	return snprintf(buf, buf_length, "Packet | source : %pI4:%hu | dest : %pI4:%hu | proto : %s\n", &iph->saddr, ntohs(source_port), 
+										&iph->daddr, ntohs(dest_port), (proto == IPPROTO_TCP) ? "TCP" : "UDP");
 }
 
 static uint8_t is_packet_equal_rule(struct iphdr *iph, struct tcphdr *tcph, struct udphdr *udph, struct kern_rule *rule)
@@ -119,6 +119,7 @@ static uint8_t ker_rule_init(struct kern_rule *rule)
 	rule->dst_port = 0;
 	rule->proto = 0;
 	rule->defined_fields = 0;
+	rule->blocking_count = 0;
 
 	return 1;
 }
@@ -128,6 +129,7 @@ static uint8_t init_rules_list(void)
 {
 	for (int i = 0; i < MAX_RULES; i++)
 		ker_rule_init(&rules_list[i]);
+	
 	rules_count = 0;
 
 	return 1;
@@ -188,11 +190,17 @@ static uint8_t is_need_to_drop(struct iphdr *orig_iph, struct tcphdr *orig_tcph,
 		if (orig_tcph == NULL)
 		{
 			if (is_packet_equal_rule(orig_iph, NULL, orig_udph, &rules_list[i]))
+			{
+				rules_list[i].blocking_count++;
 				return 1;
+			}
 		} else 
 		{
 			if (is_packet_equal_rule(orig_iph, orig_tcph, NULL, &rules_list[i]))
+			{
+				rules_list[i].blocking_count++;
 				return 1;
+			}
 		}
 	}
 
@@ -239,7 +247,7 @@ static unsigned int nf_tracer_handler(void *priv, struct sk_buff *skb, const str
 	{
 		if (is_need_to_drop(iph, tcph, NULL))
 		{
-			pr_info("Packet has been dropped\n");
+			pr_info("%s : Packet has been dropped\n", DEVICE_NAME);
 			return NF_DROP; /* Отбрасываем пакет */
 		}
 	}
@@ -249,7 +257,7 @@ static unsigned int nf_tracer_handler(void *priv, struct sk_buff *skb, const str
 	{
 		if (is_need_to_drop(iph, NULL, udph))
 		{
-			pr_info("Packet has been dropped\n");
+			pr_info("%s : Packet has been dropped\n", DEVICE_NAME);
 			return NF_DROP; /* Отбрасываем пакет */
 		}
 	}
@@ -275,7 +283,7 @@ static long int ioctl_handler(struct file *file, unsigned cmd, unsigned long arg
 			/* Читаем команду с правилом от пользователя */
 			if (copy_from_user(&user_cmd, (struct kern_cmd *)arg, sizeof(user_cmd)))
 			{
-				pr_err("mynetmod : Error copying data from user\n");
+				pr_err("%s : Error copying data from user\n", DEVICE_NAME);
 				break;
 			}
 
@@ -285,19 +293,19 @@ static long int ioctl_handler(struct file *file, unsigned cmd, unsigned long arg
 			user_cmd.res = res;
 			if (copy_to_user((struct kern_cmd *)arg, &user_cmd, sizeof(user_cmd)))
 			{
-				pr_err("mynetmod : Error copying data to user\n");
+				pr_err("%s : Error copying data to user\n", DEVICE_NAME);
 				break;
 			}
 
 			print_rule(&user_cmd.rule, buf, BUF_SIZE);
-			pr_info("Added %s\n", buf);
+			pr_info("%s : Added %s\n", DEVICE_NAME, buf);
 			break;
 
 		case DEL_RULE:
 			/* Читаем команду с правилом от пользователя */
 			if (copy_from_user(&user_cmd, (struct kern_cmd *)arg, sizeof(user_cmd)))
 			{
-				pr_err("mynetmod : Error copying data from user\n");
+				pr_err("%s : Error copying data from user\n", DEVICE_NAME);
 				break;
 			}
 
@@ -307,12 +315,12 @@ static long int ioctl_handler(struct file *file, unsigned cmd, unsigned long arg
 			user_cmd.res = res;
 			if (copy_to_user((struct kern_cmd *)arg, &user_cmd, sizeof(user_cmd)))
 			{
-				pr_err("mynetmod : Error copying data to user\n");
+				pr_err("%s : Error copying data to user\n", DEVICE_NAME);
 				break;
 			}
 
 			print_rule(&user_cmd.rule, buf, BUF_SIZE);
-			pr_info("Removed %s\n", buf);
+			pr_info("%s : Removed %s\n", DEVICE_NAME, buf);
 			break;
 
 		default:
@@ -325,28 +333,29 @@ static long int ioctl_handler(struct file *file, unsigned cmd, unsigned long arg
 /* Функция, вызываемая при открытии файла /dev/mynetmod */
 static int device_open(struct inode *device_file, struct file *instance)
 {
-	pr_info("mynetmod : Open device file\n");
+	pr_info("%s : Open device file\n", DEVICE_NAME);
 	return 0;
 }
 
 /* Функция, вызываемая при закрытии файла /dev/mynetmod */
 static int device_exit(struct inode *device_file, struct file *instance)
 {
-	pr_info("mynetmod : Close device file\n");
+	pr_info("%s : Close device file\n", DEVICE_NAME);
 	return 0;
 }
 
 /* Функция для записи статиситки в переменную buf */
 static void get_stats(char *buf, size_t buf_length)
 {
+	// char *rule_str[BUF_SIZE];
 	int offs, i;
 	offs = snprintf(buf, buf_length, "There are rules : %d\n", rules_count);
 
 	for (i = 0; i < rules_count; i++)
 	{
-		offs += snprintf(buf + offs, buf_length - offs, "i : %d | src ip : %d | dst ip : %d | src port : %d | dst prt : %d | proto : %s | def_f : %d\n", \
-				i + 1, rules_list[i].src_ip.s_addr, rules_list[i].dst_ip.s_addr, rules_list[i].src_port, rules_list[i].dst_port, \
-				(rules_list[i].proto == IPPROTO_TCP) ? "TCP" : "UDP", rules_list[i].defined_fields);
+		offs += snprintf(buf + offs, buf_length - offs, "i : %d | source : %pI4:%hu | dest : %pI4:%hu | proto : %s | def_f : %d | blocks : %d\n", \
+				i + 1, &rules_list[i].src_ip, ntohs(rules_list[i].src_port), &rules_list[i].dst_ip, ntohs(rules_list[i].dst_port), \
+				(rules_list[i].proto == IPPROTO_TCP) ? "TCP" : "UDP", rules_list[i].defined_fields, rules_list[i].blocking_count);
 	}
 }
 
@@ -378,35 +387,35 @@ static int __init mynetmod_init(void)
 	umode_t proc_mod = 0444; /* ugo+r */
 
 	/* Создание /proc/mynetnod/bl_stats */
-	proc_folder = proc_mkdir("mynetmod", NULL);
+	proc_folder = proc_mkdir(DEVICE_NAME, NULL);
 	if (proc_folder == NULL)
 	{
-		pr_alert("mynetmod : ERROR - proc_mkdir(\"mynetmod\", ...)\n");
+		pr_alert("%s : ERROR - proc_mkdir(\"%s\", ...)\n", DEVICE_NAME, DEVICE_NAME);
 		return -ENOMEM;
 	}
 
-	proc_file = proc_create("bl_stats", proc_mod, proc_folder, &pops);
+	proc_file = proc_create(PROC_STATS_NAME, proc_mod, proc_folder, &pops);
 	if (proc_folder == NULL)
 	{
-		pr_alert("mynetmod : ERROR - proc_create(\"bl_stats\", ...);\n");
+		pr_alert("%s : ERROR - proc_create(\"%s\", ...);\n", DEVICE_NAME, PROC_STATS_NAME);
 		proc_remove(proc_folder);
 		return -ENOMEM;
 	}
-	pr_info("mynetmod : self folder and files in procfs are created\n");
+	pr_info("%s : self folder and files in procfs are created\n", DEVICE_NAME);
 
 	/* Получаем major num для устройства */
 	major = register_chrdev(0, DEVICE_NAME, &fops);
 	minor = 0;
 	if (major < 0)
 	{
-		pr_alert("mynetmod : register chardev failed with %d\n", major);
+		pr_alert("%s : register chardev failed with %d\n", DEVICE_NAME, major);
 		return major;
 	}
 
 	/* Создаём файл в /dev */
 	cls = class_create(THIS_MODULE, DEVICE_NAME);
 	device_create(cls, NULL, MKDEV(major, minor), NULL, DEVICE_NAME);
-	pr_info("mynetmod : device created on /dev/%s\n", DEVICE_NAME);
+	pr_info("%s : device created on /dev/%s\n", DEVICE_NAME, DEVICE_NAME);
 
 	/* Инициализация rules_list */
 	init_rules_list();
@@ -431,7 +440,7 @@ static int __init mynetmod_init(void)
 
 	if (!nf_tracer_ops || !nf_tracer_out_ops) 
 	{
-		pr_alert("mynetmod: Memory allocation failed\n");
+		pr_alert("%s: Memory allocation failed\n", DEVICE_NAME);
 		kfree(nf_tracer_ops);
 		kfree(nf_tracer_out_ops);
 		return -ENOMEM;

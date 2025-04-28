@@ -14,6 +14,7 @@
 #include <linux/proc_fs.h>
 
 #define DEVICE_NAME "mynetmod"
+#define PROC_STATS_NAME "bl_stats"
 
 static struct nf_hook_ops *nf_tracer_ops = NULL;
 static struct nf_hook_ops *nf_tracer_out_ops = NULL;

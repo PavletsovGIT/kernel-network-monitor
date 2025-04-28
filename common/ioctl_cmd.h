@@ -28,6 +28,7 @@ struct kern_rule {
 	uint16_t dst_port;
 	uint8_t proto;
 	uint8_t defined_fields;
+	uint32_t blocking_count; 
 };
 
 // Структура для хранения параметров
@@ -51,6 +52,6 @@ struct kern_cmd {
 // Удаление правила из фильтра
 #define DEL_RULE _IOWR('a', 'b', struct kern_cmd *)
 // Чтение стсатистики из ядра
-#define SHOW _IOR('a', 'c', char *)
+//#define SHOW _IOR('a', 'c', char *)
 
 #endif // IOCTL_CMD_H_
