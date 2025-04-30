@@ -226,8 +226,8 @@ static int validate_port(uint16_t port)
 // Валидация протокола
 static int validate_proto(const char *proto) 
 {
-	if (strcasecmp(proto, "tcp") == 0) return IPPROTO_TCP;
-	if (strcasecmp(proto, "udp") == 0) return IPPROTO_UDP;
+	if (strncmp(proto, "tcp", strlen("tcp")) == 0) return IPPROTO_TCP;
+	if (strncmp(proto, "udp", strlen("udp")) == 0) return IPPROTO_UDP;
 	return 0;
 }
 

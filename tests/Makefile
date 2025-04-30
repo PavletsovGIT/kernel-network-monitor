@@ -1,5 +1,4 @@
 CC = gcc
-CFLAGS = -Wall
 
 .PHONY: all, client, server, clean
 
