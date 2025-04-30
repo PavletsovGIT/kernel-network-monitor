@@ -17,25 +17,5 @@ client: echo_client.o
 server: echo_server.o
 	$(CC) $(CFLAGS) echo_server.o -o server.out
 
-#client: tcp_client.o udp_client.o
-#	$(CC) tcp_client.o -o tcp_client.out
-#	$(CC) udp_client.o -o udp_client.out
-
-#server: tcp_server.o udp_server.o
-#	$(CC) tcp_server.o -o tcp_server.out
-#	$(CC) udp_server.o -o udp_server.out
-
-#tcp_client.o: tcp_client.c
-#	$(CC) $(CFLAGS) -c tcp_client.c
-
-#udp_client.o: udp_client.c
-#	$(CC) $(CFLAGS) -c udp_client.c
-
-#tcp_server.o: tcp_server.c 
-#	$(CC) $(CFLAGS) -c tcp_server.c
-
-#udp_server.o: udp_server.c 
-#	$(CC) $(CFLAGS) -c udp_server.c
-
 clean:
 	rm -rf *.o *.out

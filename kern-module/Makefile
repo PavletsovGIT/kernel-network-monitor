@@ -1,6 +1,6 @@
 obj-m += mynetmod.o
 
-PWD = /home/pavletsov21/eltex/knm/kern-module/
+PWD := $(shell pwd)
 
 all:
 	$(MAKE) -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
